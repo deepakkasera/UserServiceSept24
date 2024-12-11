@@ -6,8 +6,11 @@ import com.example.userservicedec24.models.Token;
 import com.example.userservicedec24.models.User;
 import com.example.userservicedec24.repositories.TokenRepository;
 import com.example.userservicedec24.repositories.UserRepository;
+import org.apache.commons.lang3.RandomStringUtils;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Optional;
@@ -16,11 +19,14 @@ import java.util.Optional;
 public class UserServiceImpl implements UserService {
     private UserRepository userRepository;
     private TokenRepository tokenRepository;
+    private BCryptPasswordEncoder passwordEncoder;
 
     public UserServiceImpl(UserRepository userRepository,
-                           TokenRepository tokenRepository) {
+                           TokenRepository tokenRepository,
+                           BCryptPasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -35,8 +41,8 @@ public class UserServiceImpl implements UserService {
         User user = new User();
         user.setName(name);
         user.setEmail(email);
-        //TODO: We should store the password in the encoded format using BCryptPassword Encoder.
-        user.setPassword(password);
+        user.setPassword(passwordEncoder.encode(password));
+        user.setRoles(new ArrayList<>());
 
         return userRepository.save(user);
     }
@@ -52,11 +58,11 @@ public class UserServiceImpl implements UserService {
 
         User user = optionalUser.get();
 
-        if (user.getPassword().equals(password)) {
+        if (passwordEncoder.matches(password, user.getPassword())) {
             //login successful, create the token.
             Token token = new Token();
             token.setUser(user);
-            token.setValue("jslkfjklfjljoe89374njnfkjnjk1233n4kjn");
+            token.setValue(RandomStringUtils.randomAlphanumeric(128));
 
             Date currentDate = new Date(); // current date and time.
             Calendar calendar = Calendar.getInstance();
@@ -79,7 +85,17 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public User validateToken(String tokenValue) {
-        return null;
+        //Check if the token is present in the DB, token is NOT deleted and
+        //token's expiry time is greater than the current time.
+        Optional<Token> optionalToken = tokenRepository.
+                findByValueAndDeletedAndExpiryDateGreaterThan(
+                        tokenValue,
+                        false,
+                        new Date()
+                );
+
+        //Token invalid
+        return optionalToken.map(Token::getUser).orElse(null);
     }
 
     @Override

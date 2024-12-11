@@ -2,6 +2,7 @@ package com.example.userservicedec24.models;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.ManyToMany;
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
