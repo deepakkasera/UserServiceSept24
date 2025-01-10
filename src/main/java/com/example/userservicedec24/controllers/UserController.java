@@ -23,6 +23,12 @@ public class UserController {
         this.userService = userService;
     }
 
+    @GetMapping("/sample")
+    public String sampleAPI() {
+        System.out.println("Received a call from ProductService!!");
+        return "";
+    }
+
     @PostMapping("/login")
     public Token login(@RequestBody LoginRequestDto requestDto) throws UserNotFoundException, UnAuthorizedException {
         return userService.login(
