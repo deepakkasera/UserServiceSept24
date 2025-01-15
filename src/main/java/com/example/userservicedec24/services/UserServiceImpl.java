@@ -1,12 +1,18 @@
 package com.example.userservicedec24.services;
 
+import com.example.userservicedec24.configs.KafkaProducerClient;
+import com.example.userservicedec24.dtos.SendEmailDTO;
 import com.example.userservicedec24.exceptions.UnAuthorizedException;
 import com.example.userservicedec24.exceptions.UserNotFoundException;
 import com.example.userservicedec24.models.Token;
 import com.example.userservicedec24.models.User;
 import com.example.userservicedec24.repositories.TokenRepository;
 import com.example.userservicedec24.repositories.UserRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.common.network.Send;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -20,13 +26,19 @@ public class UserServiceImpl implements UserService {
     private UserRepository userRepository;
     private TokenRepository tokenRepository;
     private BCryptPasswordEncoder passwordEncoder;
+    private KafkaProducerClient kafkaProducerClient;
+    private ObjectMapper objectMapper;
 
     public UserServiceImpl(UserRepository userRepository,
                            TokenRepository tokenRepository,
-                           BCryptPasswordEncoder passwordEncoder) {
+                           BCryptPasswordEncoder passwordEncoder,
+                           KafkaProducerClient kafkaProducerClient,
+                           ObjectMapper objectMapper) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.passwordEncoder = passwordEncoder;
+        this.kafkaProducerClient = kafkaProducerClient;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -44,7 +56,28 @@ public class UserServiceImpl implements UserService {
         user.setPassword(passwordEncoder.encode(password));
         user.setRoles(new ArrayList<>());
 
-        return userRepository.save(user);
+
+        //Before returning the object, we should push an sendEmail event
+        // to Kafka so that EmailService can read the event and send and Email.
+
+        user = userRepository.save(user);
+
+        SendEmailDTO emailDTO = new SendEmailDTO();
+        emailDTO.setTo(email);
+        emailDTO.setFrom("admin@scaler.com");
+        emailDTO.setSubject("Welcome to Scaler.");
+        emailDTO.setBody("Thanks for joining Scaler");
+
+        try {
+            kafkaProducerClient.sendMessage(
+                    "sendEmail",
+                    objectMapper.writeValueAsString(emailDTO)
+            );
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+
+        return user;
     }
 
     @Override
